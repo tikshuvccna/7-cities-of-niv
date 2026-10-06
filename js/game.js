@@ -69,7 +69,7 @@ function newGame() {
   const w = genWorld(seed, G.diff); const D = DIFFS[G.diff];
   Object.assign(G, {
     world: w, seen: new Uint8Array(WW * WH), day: 0, limit: D.days, gold: D.gold, food: 0, gifts: 0, men: 0, meds: 0, honor: 50, words: 0,
-    stones: 0, stoneOn: Array(7).fill(false), mode: 'sea', pos: { x: w.home.x, y: w.home.y }, prev: { x: w.home.x, y: w.home.y }, ship: { x: w.home.x, y: w.home.y },
+    stones: 0, stoneOn: Array(7).fill(false), rankIdx: 0, mode: 'sea', pos: { x: w.home.x, y: w.home.y }, prev: { x: w.home.x, y: w.home.y }, ship: { x: w.home.x, y: w.home.y },
     from: { x: w.home.x, y: w.home.y }, actor: { x: w.home.x, y: w.home.y }, moving: false, moveT: 0, moveDur: .2, facing: 1, shipDir: 1, storm: 0, steps: 0, helped: 0, vis: 6, ended: false,
   });
   hudPrev = {}; Render.cam.x = w.home.x; Render.cam.y = w.home.y; reveal(w.home.x, w.home.y, 8);
@@ -149,9 +149,22 @@ function openPort(first) {
     if (first) { G.state = 'play'; $('#hud').classList.remove('hidden'); if (matchMedia('(pointer:coarse)').matches || innerWidth < 900) $('#touch').classList.remove('hidden'); updateHUD(); wipe();
       log(`ניב מפליג עם ${G.men} אנשי צוות. הים פתוח!`, 'gold'); log('הפלג מזרחה עם החצים אל היבשת. רווח — לרדת לחוף.', ''); }
     else { log('הספינה מוכנה. רוח טובה!', 'good'); G.state = 'play'; } }
-  const p = h('div', { class: 'panel paper' }, h('h2', null, first ? '⚓ נמל אור־ים' : '⚓ נמל הבית'), h('p', null, first ? 'המועצה העמידה לרשותך ספינה. הצטייד למסע — ואל תשכח: שבטים נפגשים בידיים פתוחות, לא בחרבות.' : `חזרת לנמל. יש לך ${Math.floor(G.gold)} זהב. הצוות כעת: ${G.men}.`), grid, totalEl, h('div', { class: 'row' }, ok, !first && btn('ביטול', () => { closeModal(); G.state = 'play'; }, 'dark')));
+  const p = h('div', { class: 'panel paper' }, h('h2', null, first ? '⚓ נמל אור־ים' : '⚓ נמל הבית'), h('p', null, first ? 'המועצה העמידה לרשותך ספינה. הצטייד למסע — ואל תשכח: שבטים נפגשים בידיים פתוחות, לא בחרבות.' : `חזרת לנמל. יש לך ${Math.floor(G.gold)} זהב. הצוות כעת: ${G.men}.`), grid, totalEl, h('div', { class: 'row' }, ok, !first && btn('📜 דווח למועצה', openCouncil, 'alt'), !first && btn('ביטול', () => { closeModal(); G.state = 'play'; }, 'dark')));
   showPanel(p); upd();
 }
+
+
+/* ===== council report (קידום בדרגה, כמו שבמקור מקבלים קידום מהמלכה) ===== */
+function exploredPct() { const w = G.world; let land = 0, seen = 0; for (let i = 0; i < w.t.length; i++) if (!isWater(w.t[i])) { land++; if (G.seen[i]) seen++; } return Math.round(seen / land * 100); }
+function openCouncil() {
+  const pct = exploredPct(), st = G.world.villages.filter(v => v.station).length, s = score(), r = rankIdx(s); const promoted = r > (G.rankIdx || 0);
+  if (promoted) { G.rankIdx = r; G.gold += 40 * r; Snd.sfx('stone'); flash(); }
+  showPanel(h('div', { class: 'panel paper' }, h('h2', null, '📜 דיווח למועצת הנמל'), h('p', null, 'זקנת הנמל קוראת את מחברת המפות של ניב ומהנהנת באיטיות.'),
+    h('div', { class: 'end-stats' }, [['מפה שנחקרה', pct + '%'], ['אבני אור', G.stones + ' / 7'], ['בארות ובתי ספר', st], ['כבוד', Math.round(G.honor)], ['ניקוד נוכחי', s]].flatMap(([k, v]) => [h('span', null, k), h('b', null, v)])),
+    h('div', { class: 'rank' }, RANKS[r][1]), promoted ? h('p', { class: 'say' }, `קידום! המועצה מעניקה לך דרגה חדשה ופרס של ${40 * r} זהב.`) : h('p', null, 'עוד קצת מפה, עוד קצת כבוד — והקידום הבא קרוב.'),
+    h('div', { class: 'row' }, btn('חזרה לנמל', () => { closeModal(); openPort(false); }))));
+}
+function rankIdx(s) { let r = 0; RANKS.forEach(([m], i) => { if (s >= m) r = i; }); return r; }
 
 /* ===== time & survival ===== */
 function advanceDay(d) {
@@ -213,9 +226,9 @@ function revealHint(v) {
   v.hinted = true; if (!c) return 'הם מספרים על ימים עברו, ועל שבע ערי האור — אך את כולן כבר מצאת.';
   reveal(c.x, c.y, 3); return `הם מצביעים אל האופק ומספרים על ${c.name}! היא נוספה למפה.`;
 }
-function openVillage(v, first) {
+function openVillage(v, first, preSay) {
   G.modal = true; const cu = CULTURES[v.culture]; const cvs = h('canvas', { width: 190, height: 230 }); Render.portrait(cvs, v);
-  const body = h('div', { class: 'body' }); let say = first ? (v.trust < 0 ? 'לוחמי הכפר חוסמים את דרכך, חניתות מורמות. זה לא המקום לפחד — זה המקום לסבלנות.' : pick(cu.greet)) : '"טוב לראותך שוב."'; let mode = 'main';
+  const body = h('div', { class: 'body' }); let say = preSay || (first ? (v.trust < 0 ? 'לוחמי הכפר חוסמים את דרכך, חניתות מורמות. זה לא המקום לפחד — זה המקום לסבלנות.' : pick(cu.greet)) : '"טוב לראותך שוב."'); let mode = 'main';
   showPanel(h('div', { class: 'panel' }, h('div', { class: 'enc' }, cvs, body)));
   function leave(msg) { if (msg) log(msg); closeModal(); }
   function rewardCheck() {
@@ -224,10 +237,25 @@ function openVillage(v, first) {
   function act(fn) { return () => { fn(); updateHUD(); render(); }; }
   const doGift = () => { if (G.gifts <= 0) { say = 'אין לך מתנות. אולי תחזור מהנמל?'; return; } G.gifts--; v.gifts++; v.trust += v.trust < 0 ? 3 : 2; addHonor(1); Snd.sfx('gift'); Render.burst(G.pos.x + .5, G.pos.y + .5, '#ffd36a', 30, 3, 3, 1.2);
     say = v.trust < 0 ? 'חניתות יורדות לאט. הם מביטים במתנה, ואז בך.' : pick(['הם מקבלים את המתנה בחיוך. "אנחנו נזכור אותך."', 'ילדים מתקבצים סביב המתנה בצהלה.', 'זקן הכפר מהנהן: "אדם שנותן — אדם שנשאר."']); rewardCheck(); if (v.trust >= 3 && !v.hinted) say += ' ' + revealHint(v); };
-  const doTalk = () => { advanceDay(.3); G.words++;
-    if (v.trust < 0) { const p = clamp(.35 + G.honor / 200 + G.words * .02, .3, .85); if (Math.random() < p) { v.trust += 2; Snd.sfx('good'); say = 'ניב מניח את הנשק הקטן שלו, מרים ידיים פתוחות ומדבר לאט, במילים שלמד. אט־אט החניתות יורדות.'; }
-      else { Snd.sfx('bad'); const lose = Math.random() < .3 && G.men > 1; if (lose) { G.men--; log('חנית פוצעת אחד מאנשיך. הוא נאלץ לעזוב את המסע.', 'bad'); } else { G.food = Math.max(0, G.food - 6); log('הם גורשים אתכם וחלק מהמזון הולך לאיבוד.', 'bad'); } G.pos = { x: G.prev.x, y: G.prev.y }; G.actor.x = G.pos.x; G.actor.y = G.pos.y; return leave('"עוד לא." ניב נסוג בכבוד, ומבטיח לחזור בלב פתוח.'); } }
-    else { if (v.talks < 3) { v.talks++; v.trust = Math.min(v.trust + 1, 4); } say = pick([`הם מספרים על ${cu.needs}.`, 'ניב לומד מילים חדשות, והם צוחקים על ההגייה שלו.', 'שיחה ארוכה ליד המדורה. מתברר שיש הרבה במשותף.', 'הם מלמדים אותו שיר שמברך על הדרך.']); Snd.sfx('good'); if (v.trust >= 3 && !v.hinted) say += ' ' + revealHint(v); rewardCheck(); } };
+  function retreat(msg) {
+    const lose = Math.random() < .3 && G.men > 1; if (lose) { G.men--; log('חנית פוצעת אחד מאנשיך. הוא נאלץ לעזוב את המסע.', 'bad'); } else { G.food = Math.max(0, G.food - 6); log('הם גורשים אתכם וחלק מהמזון הולך לאיבוד.', 'bad'); }
+    G.pos = { x: G.prev.x, y: G.prev.y }; G.actor.x = G.pos.x; G.actor.y = G.pos.y; leave(msg);
+  }
+  const doTalk = () => {
+    advanceDay(.3); G.words++;
+    if (v.trust < 2) { // מחסום שפה: הגישה אל ראש הכפר היא אתגר זריזות, כמו במשחק המקורי
+      Minigames.approach(v, G.diff, G.gifts, (ok, used) => {
+        G.gifts -= used; updateHUD();
+        if (ok) { v.trust += v.trust < 0 ? 3 : 2; v.talks++; Snd.sfx('good'); addHonor(1); openVillage(v, false, 'ניב מגיע אל ראש הכפר בידיים פתוחות. בלי מילים משותפות — רק חיוך, מחוות, ומתנה קטנה. החניתות יורדות.'); }
+        else { Snd.sfx('bad'); if (v.trust < 0) { addHonor(0); retreat('"עוד לא." ניב נסוג בכבוד, ומבטיח לחזור בלב פתוח.'); } else { v.trust -= 1; openVillage(v, false, 'ניב נתקל בכמה מאנשי הכפר, והם נבהלו. אולי בניסיון הבא — לאט יותר.'); } }
+      });
+      return;
+    }
+    if (v.talks < 3) { v.talks++; v.trust = Math.min(v.trust + 1, 4); }
+    say = pick([`הם מספרים על ${cu.needs}.`, 'ניב לומד מילים חדשות, והם צוחקים על ההגייה שלו.', 'שיחה ארוכה ליד המדורה. מתברר שיש הרבה במשותף.', 'הם מלמדים אותו שיר שמברך על הדרך.']); Snd.sfx('good'); if (v.trust >= 3 && !v.hinted) say += ' ' + revealHint(v); rewardCheck();
+  };
+  const doStation = () => { if (G.gold < 25) { say = 'בניית באר ובית ספר עולה 25 זהב.'; return; } G.gold -= 25; v.station = true; v.restDay = G.day; addHonor(4, `נבנו באר ובית ספר ב${v.name}`); Snd.sfx('stone'); Render.burst(G.pos.x + .5, G.pos.y + .5, '#58c8ff', 50, 3, 3, 1.4); say = 'ניב והכפר בונים יחד באר ובית ספר קטן. מעכשיו זה מקלט בטוח לכל מי שבא בשלום.'; };
+  const doRest = () => { if (G.day - v.restDay < 8) { say = 'הכפר עדיין מתאושש מהאירוח האחרון. נסה בעוד כמה ימים.'; return; } v.restDay = G.day; advanceDay(.5); G.food += 14; Snd.sfx('good'); say = 'אנשי הכפר מכינים ארוחה חמה וממלאים את המחסן ב־14 מזון. "הבאר שלכם — ביתנו."'; };
   const doHelp = () => { if (v.need === 'food') { if (G.food < 15) { say = 'צריך לפחות 15 מזון כדי לעזור.'; return; } G.food -= 15; say = 'ניב מחלק מזון ללא היסוס. אנשי הכפר נושמים לרווחה.'; } else { if (G.meds < 1) { say = 'צריך תרופה כדי לעזור לחולים. חפש בנמל.'; return; } G.meds--; say = 'ניב מטפל בחולה בעצמו. עד הערב — החום יורד.'; }
     v.needDone = true; v.trust += 4; G.helped++; addHonor(5, 'עזרת למי שהיה זקוק לכך'); Snd.sfx('stone'); Render.burst(G.pos.x + .5, G.pos.y + .5, '#9be36a', 40, 3, 3, 1.4); rewardCheck(); if (!v.hinted) say += ' ' + revealHint(v); };
   const trade = (k) => () => { if (k === 'food') { if (G.gold < 6) { say = 'אין לך מספיק זהב.'; return; } G.gold -= 6; G.food += 12; } else if (k === 'meds') { if (G.gold < 10) { say = 'אין לך מספיק זהב.'; return; } G.gold -= 10; G.meds++; } else { if (G.food < 30) { say = 'אין לך עודף מזון.'; return; } G.food -= 10; G.gold += 4; } Snd.sfx('coin'); say = 'עסקה הוגנת. שני הצדדים מרוצים.'; };
@@ -238,6 +266,8 @@ function openVillage(v, first) {
     const row = h('div', { class: 'row' });
     if (mode === 'main') {
       row.append(btn(`🎁 מתנה (${G.gifts})`, act(doGift)), btn('💬 לשוחח', act(doTalk), 'alt'));
+      if (v.trust >= 4 && !v.station) row.append(btn('🏗️ באר ובית ספר (25 זהב)', act(doStation)));
+      if (v.station) row.append(btn('🛌 מקלט: ארוחה ומנוחה', act(doRest), 'alt'));
       if (v.trust >= 1) row.append(btn('🤝 סחר', () => { mode = 'trade'; render(); }, 'alt'));
       if (v.need && !v.needDone && v.trust >= 0) row.append(btn(v.need === 'food' ? '❤️ לעזור (15 מזון)' : '❤️ לעזור (תרופה)', act(doHelp)));
       row.append(btn('🚶 להמשיך בדרך', () => leave(), 'dark'));
@@ -283,13 +313,13 @@ function landEvent() {
 }
 
 /* ===== ending ===== */
-function score() { const v = G.world.villages.filter(v => v.trust >= 3).length; return G.stones * 150 + v * 25 + Math.round(G.honor) * 6 + Math.floor(G.gold / 4) + (G.stones >= 7 ? Math.max(0, Math.floor(G.limit - G.day)) * 3 : 0) + G.helped * 20; }
+function score() { const v = G.world.villages.filter(v => v.trust >= 3).length; return exploredPct() * 3 + G.world.villages.filter(v => v.station).length * 30 + G.stones * 150 + v * 25 + Math.round(G.honor) * 6 + Math.floor(G.gold / 4) + (G.stones >= 7 ? Math.max(0, Math.floor(G.limit - G.day)) * 3 : 0) + G.helped * 20; }
 function rankOf(s) { let r = RANKS[0][1]; for (const [m, n] of RANKS) if (s >= m) r = n; return r; }
 function endGame(win, reason) {
   if (G.ended) return; G.ended = true; G.modal = true; screenEl.className = ''; const s = score(); if (s > G.best) { G.best = s; try { localStorage.setItem('niv7_best', s); } catch (e) {} }
   const finish = () => {
     G.state = 'end'; $('#hud').classList.add('hidden'); $('#touch').classList.add('hidden'); Snd.mood(win ? 'win' : 'city'); if (win) Snd.sfx('win');
-    const stats = [['אבני אור', `${G.stones} / 7`], ['כפרים ידידותיים', G.world.villages.filter(v => v.trust >= 3).length], ['עזרה לנזקקים', G.helped], ['כבוד', Math.round(G.honor)], ['ימים שעברו', Math.floor(G.day)], ['ניקוד', s], ['שיא אישי', G.best]];
+    const stats = [['אבני אור', `${G.stones} / 7`], ['מפה שנחקרה', exploredPct() + '%'], ['בארות ובתי ספר', G.world.villages.filter(v => v.station).length], ['כפרים ידידותיים', G.world.villages.filter(v => v.trust >= 3).length], ['עזרה לנזקקים', G.helped], ['כבוד', Math.round(G.honor)], ['ימים שעברו', Math.floor(G.day)], ['ניקוד', s], ['שיא אישי', G.best]];
     showPanel(h('div', { class: 'panel paper' }, h('h2', null, win ? '🌟 האור נשלם' : '⚓ סוף המסע'),
       h('p', null, win ? 'ניב מניח את שבע האבנים זו לצד זו — והן יוצרות מצפן של אור שמצביע חזרה הביתה ואל כל מקום שבו מישהו זקוק לעזרה. את השער האחרון פתחו לא הזהב ולא החרב, אלא ההגינות. הים כולו מתמלא בשירה, ושמו של ניב הולך לפניו — כפי שביקשה זקנת הנמל.' : reason),
       h('div', { class: 'rank' }, rankOf(s)), h('div', { class: 'end-stats' }, stats.flatMap(([k, v]) => [h('span', null, k), h('b', null, v)])),

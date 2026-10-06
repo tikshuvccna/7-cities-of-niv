@@ -118,6 +118,42 @@ const Minigames = (() => {
       shuffle(d.o.slice(), Math.random).map(([t, ok]) => h('button', { class: 'btn alt', style: 'font-size:17px', onclick: async e => { if (ok) { e.target.classList.add('ok'); Snd.sfx('good'); box.append(h('p', { class: 'say' }, d.why)); box.querySelectorAll('button').forEach(b => b.disabled = true); await sleep(2200); i++; if (i >= 3) win(); else render(); } else { e.target.classList.add('no'); e.target.disabled = true; Snd.sfx('bad'); box.append(h('p', { class: 'say' }, 'ניב עוצר ושוקל שוב… זו לא הדרך שלו.')); } } }, t)))); }
     render(); return { el: frame(city.name, city.story, box, exit), cleanup: () => {} };
   };
+
+  /* אתגר הגישה אל ראש הכפר — מחסום שפה, כמו במשחק המקורי: מתחמקים מהכפריים ומגיעים אליו בלי להתנגש */
+  function approach(v, diff, gifts, cb) {
+    const Wd = 520, Hd = 300, cu = CULTURES[v.culture]; let giftsLeft = gifts, used = 0, bumps = 0, freeze = 0, alive = true, raf, last = performance.now(), msg = 'הגע אל ראש הכפר בלי להיתקל באנשים. רווח = מתנה שמסיחה את דעתם.';
+    const me = { x: 24, y: Hd / 2 }, chief = { x: Wd - 40, y: Hd / 2 }, keys = {}, tgt = { on: false, x: 0, y: 0 };
+    const folks = Array.from({ length: 4 + diff * 2 }, (_, i) => ({ x: 90 + (i + .5) * (Wd - 190) / (4 + diff * 2), y: 30 + Math.random() * (Hd - 60), vy: (Math.random() < .5 ? -1 : 1) * (55 + Math.random() * 55 + diff * 18) }));
+    const c = h('canvas', { width: Wd, height: Hd }), x = c.getContext('2d'); const info = h('p', null, msg); const gbtn = h('button', { class: 'btn', onclick: gift }, '');
+    function gift() { if (giftsLeft <= 0 || freeze > 0) return; giftsLeft--; used++; freeze = 3.2; Snd.sfx('gift'); info.textContent = 'מתנה! כולם מתעניינים בה ונעצרים לרגע…'; upd(); }
+    function upd() { gbtn.textContent = `🎁 מתנה מסיחה (${giftsLeft})`; gbtn.disabled = giftsLeft <= 0; }
+    upd();
+    function end(ok) { if (!alive) return; alive = false; cancelAnimationFrame(raf); document.removeEventListener('keydown', kd); document.removeEventListener('keyup', ku); setTimeout(() => cb(ok, used), 650); }
+    const kd = e => { if (e.code === 'Space') { e.preventDefault(); gift(); } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'].includes(e.key)) { e.preventDefault(); keys[e.key] = true; } }, ku = e => { delete keys[e.key]; };
+    document.addEventListener('keydown', kd); document.addEventListener('keyup', ku);
+    const pt = e => { const r = c.getBoundingClientRect(); tgt.x = (e.clientX - r.left) * Wd / r.width; tgt.y = (e.clientY - r.top) * Hd / r.height; };
+    c.addEventListener('pointerdown', e => { tgt.on = true; pt(e); }); c.addEventListener('pointermove', e => { if (tgt.on) pt(e); }); ['pointerup', 'pointerleave'].forEach(ev => c.addEventListener(ev, () => tgt.on = false));
+    function frame(now) {
+      if (!alive) return; const dt = Math.min(.05, (now - last) / 1000); last = now; freeze = Math.max(0, freeze - dt);
+      let dx = (keys.ArrowRight || keys.d ? 1 : 0) - (keys.ArrowLeft || keys.a ? 1 : 0), dy = (keys.ArrowDown || keys.s ? 1 : 0) - (keys.ArrowUp || keys.w ? 1 : 0);
+      if (tgt.on) { const ax = tgt.x - me.x, ay = tgt.y - me.y, d = Math.hypot(ax, ay); if (d > 6) { dx = ax / d; dy = ay / d; } }
+      const l = Math.hypot(dx, dy) || 1; me.x = clamp(me.x + dx / l * 130 * dt * (dx || dy ? 1 : 0), 10, Wd - 10); me.y = clamp(me.y + dy / l * 130 * dt * (dx || dy ? 1 : 0), 10, Hd - 10);
+      for (const f of folks) { if (!freeze) { f.y += f.vy * dt; if (f.y < 20 || f.y > Hd - 20) f.vy *= -1; } if (Math.hypot(f.x - me.x, f.y - me.y) < 19 && !freeze) { bumps++; Snd.sfx('bad'); me.x = 24; me.y = Hd / 2; info.textContent = bumps >= 3 ? 'הכפריים נבהלו מדי…' : `התנגשת! (${bumps}/3) ניב מתנצל ומתחיל מחדש.`; if (bumps >= 3) return end(false); } }
+      if (Math.hypot(chief.x - me.x, chief.y - me.y) < 26) { info.textContent = 'הגעת אל ראש הכפר!'; Snd.sfx('good'); return end(true); }
+      x.fillStyle = cu.cloth + ''; const g = x.createLinearGradient(0, 0, 0, Hd); g.addColorStop(0, '#6aa83c'); g.addColorStop(1, '#4a8a2c'); x.fillStyle = g; x.fillRect(0, 0, Wd, Hd);
+      x.fillStyle = '#00000018'; for (let i = 0; i < 30; i++) x.fillRect(hash2(i, 1, 2) * Wd, hash2(i, 2, 2) * Hd, 14, 3);
+      const person = (px, py, col, band, big) => { x.fillStyle = '#00000040'; x.beginPath(); x.ellipse(px, py + 11, 10, 4, 0, 0, TAU); x.fill(); x.fillStyle = col; x.beginPath(); x.arc(px, py, big ? 13 : 10, 0, TAU); x.fill(); x.fillStyle = cu.skin; x.beginPath(); x.arc(px, py - 9, big ? 8 : 6.5, 0, TAU); x.fill(); x.fillStyle = band; x.fillRect(px - 7, py - 15, 14, 3); };
+      for (const f of folks) person(f.x, f.y, cu.cloth, cu.band);
+      x.fillStyle = '#ffd36a'; x.globalAlpha = .35 + .2 * Math.sin(now / 200); x.beginPath(); x.arc(chief.x, chief.y, 30, 0, TAU); x.fill(); x.globalAlpha = 1; person(chief.x, chief.y, '#a0302a', '#ffd36a', true);
+      person(me.x, me.y, '#2c6bd6', '#d33a3a');
+      if (freeze > 0) { x.fillStyle = '#ffffff22'; x.fillRect(0, 0, Wd, Hd); x.font = '28px sans-serif'; x.textAlign = 'center'; for (const f of folks) x.fillText('🎁', f.x, f.y - 24); }
+      x.fillStyle = '#fff'; x.font = '700 14px Heebo,sans-serif'; x.textAlign = 'right'; x.fillText(`התנגשויות: ${bumps}/3`, Wd - 10, 20);
+      raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+    const panel = h('div', { class: 'panel mg' }, h('h2', null, `גישה אל ראש ${v.name}`), info, c, h('div', { class: 'row' }, gbtn, h('button', { class: 'btn dark', onclick: () => end(false) }, 'לסגת')));
+    const screen = $('#screen'); screen.innerHTML = ''; screen.append(panel); screen.className = 'on dim';
+  }
   const GAMES = { lanterns, riddles, maze, bridge, scales, stars, honor };
   function run(city, diff, G, onWin, onExit) {
     let cur = null; const screen = $('#screen');
@@ -125,5 +161,5 @@ const Minigames = (() => {
     cur = GAMES[city.game](city, diff, () => finish(onWin), () => finish(onExit), G);
     screen.innerHTML = ''; screen.append(cur.el); screen.className = 'on dim';
   }
-  return { run };
+  return { run, approach };
 })();
