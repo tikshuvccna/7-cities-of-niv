@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a1226">
+<title>שבע הערים של ניב</title>
+<meta name="description" content="שבע הערים של ניב — משחק הרפתקאות ומסע גילוי בעברית, בהשראת 'שבע ערי הזהב' (1984).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=Secular+One&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div class="stat" title="יום"><span class="ic">📅</span><b id="s-day">0</b><small id="s-lim"></small></div>
+    <div class="stat" title="מזון"><span class="ic">🍞</span><b id="s-food">0</b></div>
+    <div class="stat" title="מתנות"><span class="ic">🎁</span><b id="s-gifts">0</b></div>
+    <div class="stat" title="זהב"><span class="ic">🪙</span><b id="s-gold">0</b></div>
+    <div class="stat" title="אנשי צוות"><span class="ic">🧑‍🤝‍🧑</span><b id="s-men">0</b></div>
+    <div class="stat" title="תרופות"><span class="ic">🧪</span><b id="s-meds">0</b></div>
+    <div class="stat honor" title="כבוד"><span class="ic">🎖️</span><b id="s-honor">0</b></div>
+    <div id="stones" title="אבני האור"></div>
+  </div>
+  <canvas id="mini" width="160" height="104"></canvas>
+  <div id="ctx" class="ctx hidden"></div>
+  <div id="log"></div>
+  <div class="hud-btns">
+    <button id="b-sound" title="צליל (M)">🔊</button>
+    <button id="b-help" title="עזרה (H)">❓</button>
+    <button id="b-pause" title="תפריט (Esc)">☰</button>
+  </div>
+</div>
+
+<div id="touch" class="hidden">
+  <div class="dpad">
+    <button data-k="ArrowUp" class="u">▲</button>
+    <button data-k="ArrowLeft" class="l">◀</button>
+    <button data-k="ArrowRight" class="r">▶</button>
+    <button data-k="ArrowDown" class="d">▼</button>
+  </div>
+  <button id="t-act">פעולה</button>
+</div>
+
+<div id="screen"></div>
+<div id="toasts"></div>
+<div id="wipe"></div>
+<div id="flash"></div>
+
+<script src="js/util.js"></script>
+<script src="js/world.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/render.js"></script>
+<script src="js/minigames.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
