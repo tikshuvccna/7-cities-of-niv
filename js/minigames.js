@@ -115,7 +115,7 @@ const Minigames = (() => {
   const honor = (city, diff, win, exit, G) => {
     const ds = shuffle(DILEMMAS.slice(), Math.random).slice(0, 3); let i = 0; const box = h('div');
     function render() { box.innerHTML = ''; const d = ds[i]; box.append(h('p', { style: 'font-size:20px;font-weight:700' }, `מבחן ${i + 1} מתוך 3: ${d.q}`), h('div', { style: 'display:flex;flex-direction:column;gap:8px;margin-top:10px' },
-      shuffle(d.o.slice(), Math.random).map(([t, ok]) => h('button', { class: 'btn alt', style: 'font-size:17px', onclick: async e => { if (ok) { e.target.classList.add('ok'); Snd.sfx('good'); box.append(h('p', { class: 'say' }, d.why)); box.querySelectorAll('button').forEach(b => b.disabled = true); await sleep(2200); i++; if (i >= 3) win(); else render(); } else { e.target.classList.add('no'); e.target.disabled = true; Snd.sfx('bad'); box.append(h('p', { class: 'say' }, 'ניב עוצר ושוקל שוב… זו לא הדרך שלו.')); } } }, t)))); }
+      shuffle(d.o.slice(), Math.random).map(([t, ok]) => h('button', { class: 'btn alt', style: 'font-size:17px', onclick: async e => { if (ok) { e.target.classList.add('ok'); Snd.sfx('good'); box.append(h('p', { class: 'say' }, d.why)); box.querySelectorAll('button').forEach(b => b.disabled = true); await sleep(2200); i++; if (i >= 3) win(); else render(); } else { e.target.classList.add('no'); e.target.disabled = true; Snd.sfx('bad'); box.append(h('p', { class: 'say' }, 'מושון עוצר ושוקל שוב… זו לא הדרך שלו.')); } } }, t)))); }
     render(); return { el: frame(city.name, city.story, box, exit), cleanup: () => {} };
   };
 
@@ -138,7 +138,7 @@ const Minigames = (() => {
       let dx = (keys.ArrowRight || keys.d ? 1 : 0) - (keys.ArrowLeft || keys.a ? 1 : 0), dy = (keys.ArrowDown || keys.s ? 1 : 0) - (keys.ArrowUp || keys.w ? 1 : 0);
       if (tgt.on) { const ax = tgt.x - me.x, ay = tgt.y - me.y, d = Math.hypot(ax, ay); if (d > 6) { dx = ax / d; dy = ay / d; } }
       const l = Math.hypot(dx, dy) || 1; me.x = clamp(me.x + dx / l * 130 * dt * (dx || dy ? 1 : 0), 10, Wd - 10); me.y = clamp(me.y + dy / l * 130 * dt * (dx || dy ? 1 : 0), 10, Hd - 10);
-      for (const f of folks) { if (!freeze) { f.y += f.vy * dt; if (f.y < 20 || f.y > Hd - 20) f.vy *= -1; } if (Math.hypot(f.x - me.x, f.y - me.y) < 19 && !freeze) { bumps++; Snd.sfx('bad'); me.x = 24; me.y = Hd / 2; info.textContent = bumps >= 3 ? 'הכפריים נבהלו מדי…' : `התנגשת! (${bumps}/3) ניב מתנצל ומתחיל מחדש.`; if (bumps >= 3) return end(false); } }
+      for (const f of folks) { if (!freeze) { f.y += f.vy * dt; if (f.y < 20 || f.y > Hd - 20) f.vy *= -1; } if (Math.hypot(f.x - me.x, f.y - me.y) < 19 && !freeze) { bumps++; Snd.sfx('bad'); me.x = 24; me.y = Hd / 2; info.textContent = bumps >= 3 ? 'הכפריים נבהלו מדי…' : `התנגשת! (${bumps}/3) מושון מתנצל ומתחיל מחדש.`; if (bumps >= 3) return end(false); } }
       if (Math.hypot(chief.x - me.x, chief.y - me.y) < 26) { info.textContent = 'הגעת אל ראש הכפר!'; Snd.sfx('good'); return end(true); }
       x.fillStyle = cu.cloth + ''; const g = x.createLinearGradient(0, 0, 0, Hd); g.addColorStop(0, '#6aa83c'); g.addColorStop(1, '#4a8a2c'); x.fillStyle = g; x.fillRect(0, 0, Wd, Hd);
       x.fillStyle = '#00000018'; for (let i = 0; i < 30; i++) x.fillRect(hash2(i, 1, 2) * Wd, hash2(i, 2, 2) * Hd, 14, 3);
