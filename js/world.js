@@ -116,8 +116,17 @@ function genWorld(seed, diff) {
     villages.push({
       id: villages.length, x, y, name: nameOf(), culture, att, trust: att === 0 ? 2 : att === 1 ? 0 : -3,
       met: false, hint: villages.length % 7, hinted: false, need: rnd() < .38 ? (rnd() < .6 ? 'food' : 'meds') : null, needDone: false,
-      rewarded: false, talks: 0, gifts: 0, seed: (rnd() * 1e9) | 0,
+      rewarded: false, talks: 0, gifts: 0, seed: (rnd() * 1e9) | 0, likes: rnd() < .75 ? culture : (rnd() * 4) | 0,
     });
+  }
+  // gold mines: hills beside mountains (כמו במקור — מכרות תמיד ליד רכסי הרים)
+  const mines = []; const mc = cand.slice(); shuffle(mc, rnd);
+  for (const c of mc) {
+    if (mines.length >= 8) break; if (t[c] !== T_HILLS && t[c] !== T_FOREST) continue; const x = c % W, y = (c / W) | 0; let nearM = false;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < W && ny < H && t[idx(nx, ny)] === T_MOUNT) nearM = true; }
+    if (!nearM || dist[c] < 2) continue;
+    if (cities.some(o => cheb(o.x, o.y, x, y) < 2) || villages.some(o => cheb(o.x, o.y, x, y) < 2) || mines.some(o => cheb(o.x, o.y, x, y) < 6)) continue;
+    mines.push({ id: mines.length, x, y, gold: 60 + ((rnd() * 100) | 0), found: false, crew: 0, food: 0, stock: 0 });
   }
   // landAdj bitmask: bit 0..3 = land at E,W,S,N
   const adj = new Uint8Array(W * H);
@@ -125,5 +134,5 @@ function genWorld(seed, diff) {
     let m = 0; N4.forEach(([dx, dy], k) => { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < W && ny < H && !isWater(t[idx(nx, ny)])) m |= 1 << k; });
     adj[idx(x, y)] = m;
   }
-  return { W, H, t, comp, best, dist, villages, cities, home, adj, seed };
+  return { W, H, t, comp, best, dist, villages, cities, mines, home, adj, seed };
 }

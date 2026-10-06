@@ -15,7 +15,7 @@ function h(tag, props, ...kids) {
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else e.setAttribute(k, v);
   }
-  for (const c of kids.flat()) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(c)); }
+  for (const c of kids.flat(Infinity)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(c)); }
   return e;
 }
 

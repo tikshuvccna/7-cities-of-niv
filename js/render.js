@@ -179,6 +179,8 @@ const Render = (() => {
     const known = (xx, yy) => G.seen[yy * w.W + xx] === 1;
     for (const v of w.villages) if ((v.y >= y0 - 1 && v.y <= y1 && v.x >= x0 && v.x <= x1) && (known(v.x, v.y))) drawVillage(v, ox + v.x * T, oy + v.y * T, time);
     for (const c of w.cities) if (c.found && c.y >= y0 - 4 && c.y <= y1 + 1) drawCity(c, ox + c.x * T, oy + c.y * T, time, c.id === 6 && G.stones < 6 && !c.done);
+    ctx.font = `${Math.round(T * .55)}px sans-serif`; ctx.textAlign = 'center';
+    for (const m of w.mines) if (m.found && m.y >= y0 - 1 && m.y <= y1 && m.x >= x0 && m.x <= x1) ctx.fillText('⛏️', ox + m.x * T + T / 2, oy + m.y * T + T * .72);
     const shipX = ox + (G.mode === 'sea' ? ax : G.ship.x) * T, shipY = oy + (G.mode === 'sea' ? ay : G.ship.y) * T;
     drawShip(shipX, shipY, time, G.shipDir, G.moving && G.mode === 'sea');
     if (G.mode === 'land') drawNiv(ox + ax * T, oy + ay * T, time, G.moving, G.facing);
@@ -234,6 +236,7 @@ const Render = (() => {
     const blink = (Date.now() / 400) & 1;
     for (const v of w.villages) if (G.seen[v.y * w.W + v.x] || G.diff === 0) { g.fillStyle = v.met ? '#7bd88f' : '#ff9f2e'; g.fillRect(v.x * sc - 1, v.y * sc - 1, 4, 4); }
     for (const c of w.cities) if (c.found) { g.fillStyle = c.done ? '#fff' : c.color; g.fillRect(c.x * sc - 2, c.y * sc - 2, 6, 6); g.strokeStyle = '#000'; g.strokeRect(c.x * sc - 2, c.y * sc - 2, 6, 6); }
+    for (const m of w.mines) if (m.found) { g.fillStyle = '#ffd34d'; g.fillRect(m.x * sc - 1, m.y * sc - 1, 4, 4); }
     g.fillStyle = '#fff'; g.fillRect(G.ship.x * sc - 1, G.ship.y * sc - 1, 4, 4);
     if (blink) { g.fillStyle = '#ff3b3b'; g.fillRect(G.pos.x * sc - 2, G.pos.y * sc - 2, 5, 5); }
   }

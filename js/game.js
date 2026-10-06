@@ -6,10 +6,16 @@ const DIFFS = [
   { name: 'מגלה ארצות', icon: '🗺️', gold: 250, days: 95, desc: 'אתגר אמיתי: יותר חשדנות, פחות זמן, חידות קשות יותר.' },
 ];
 const RANKS = [[0, 'מלח מתלמד'], [500, 'חוקר דרכים'], [900, 'רב־חובל'], [1300, 'שגריר הקשרים'], [1700, 'נגיד הערים'], [2100, 'אגדת האור']];
-const PRICE = { men: 25, food: 3, gifts: 6, meds: 12 };
+const PRICE = { men: 25, food: 3, gift: 6, meds: 12, horses: 15 };
+const KINDS = [['tools', '🔨', 'כלי עבודה'], ['seeds', '🌱', 'זרעים וצמחים'], ['cloth', '🧵', 'בדים'], ['music', '🪕', 'כלי נגינה']];
+const SEASONS = ['🌸', '☀️', '🍂', '❄️'];
 
 const G = { state: 'title', modal: false, keys: {}, diff: 1, mapMode: 'fixed', raid: false, best: 0 };
 try { G.best = +localStorage.getItem('niv7_best') || 0; } catch (e) {}
+G.gk = { tools: 0, seeds: 0, cloth: 0, music: 0 };
+Object.defineProperty(G, 'gifts', { enumerable: false, get() { return G.gk.tools + G.gk.seeds + G.gk.cloth + G.gk.music; },
+  set(v) { let d = G.gifts - v; if (d < 0) G.gk.tools += -d; else while (d-- > 0) { const k = Object.keys(G.gk).sort((a, b) => G.gk[b] - G.gk[a])[0]; if (G.gk[k] > 0) G.gk[k]--; } } });
+const season = () => Math.floor(G.day / 30) % 4;
 
 /* ===== UI helpers ===== */
 const screenEl = $('#screen');
@@ -25,8 +31,9 @@ function btn(label, fn, cls = '') { return h('button', { class: 'btn ' + cls, on
 let hudPrev = {};
 function updateHUD() {
   if (!G.world) return;
-  const vals = { day: Math.floor(G.day), food: Math.floor(G.food), gifts: G.gifts, gold: Math.floor(G.gold), men: G.men, meds: G.meds, honor: Math.round(G.honor) };
+  const vals = { day: Math.floor(G.day), food: Math.floor(G.food), gifts: G.gifts, gold: Math.floor(G.gold), men: G.men, meds: G.meds, honor: Math.round(G.honor), hull: Math.round(G.hull) };
   for (const k in vals) { const el = $('#s-' + k); el.textContent = vals[k]; if (hudPrev[k] != null && hudPrev[k] !== vals[k] && k !== 'day') { const p = el.parentElement; p.classList.add('pulse'); setTimeout(() => p.classList.remove('pulse'), 350); } hudPrev[k] = vals[k]; }
+  $('#s-season').textContent = SEASONS[season()]; $('#s-pos').textContent = G.pos.x + '·' + G.pos.y; $('#s-hull').parentElement.classList.toggle('warn', G.hull < 35);
   $('#s-lim').textContent = '\u200e/' + G.limit;
   const need = (G.men + 1) * .5; $('#s-food').parentElement.classList.toggle('warn', G.food < need * 5);
   $('#stones').innerHTML = ''; CITY_DEFS.forEach((c, i) => $('#stones').append(h('i', { class: G.stoneOn[i] ? 'on' : '', style: `--c:${c.color}`, title: c.name })));
@@ -67,7 +74,9 @@ function addHonor(n, why) { G.honor = clamp(G.honor + n, 0, 100); if (why) log((
 function newGame() {
   const seed = G.mapMode === 'fixed' ? 1492 : (Math.random() * 1e9) | 0;
   const w = genWorld(seed, G.diff); const D = DIFFS[G.diff];
+  G.gk = { tools: 0, seeds: 0, cloth: 0, music: 0 };
   Object.assign(G, {
+    hull: 100, horses: 0, ride: false, guides: 0, voyages: 0,
     world: w, seen: new Uint8Array(WW * WH), day: 0, limit: D.days, gold: D.gold, food: 0, gifts: 0, men: 0, meds: 0, honor: 50, words: 0,
     stones: 0, stoneOn: Array(7).fill(false), rankIdx: 0, raids: 0, mode: 'sea', pos: { x: w.home.x, y: w.home.y }, prev: { x: w.home.x, y: w.home.y }, ship: { x: w.home.x, y: w.home.y },
     from: { x: w.home.x, y: w.home.y }, actor: { x: w.home.x, y: w.home.y }, moving: false, moveT: 0, moveDur: .2, facing: 1, shipDir: 1, storm: 0, steps: 0, helped: 0, vis: 6, ended: false,
@@ -84,7 +93,7 @@ function showTitle() {
   const main = h('div', { class: 't-main' }, words.map((w, wi) => h('div', { class: 'w' + (wi === 3 ? ' niv' : '') }, [...w].map(ch => h('span', { class: 'ch', style: `animation-delay:${(.4 + (n++) * .09).toFixed(2)}s` }, ch)))));
   const t = h('div', { id: 'title' }, h('div', { class: 't-small' }, 'מסע של כבוד · חברות · אור'), main, h('div', { class: 't-sub' }, 'שבע ערים נעלמו בין הים לשמש. איש אחד הגון יצא למצוא אותן.'),
     h('div', { class: 't-menu' },
-      btn('⛵ התחל מסע', showSetup), btn('📜 איך משחקים', () => showHow(showTitle), 'alt'),
+      btn('⛵ התחל מסע', showSetup), hasSave() && btn('📂 המשך משחק שמור', loadGame, 'alt'), btn('📜 איך משחקים', () => showHow(showTitle), 'alt'),
       btn(Snd.on ? '🔊 צליל: פועל' : '🔇 צליל: כבוי', e => { Snd.toggle(); e.target.textContent = Snd.on ? '🔊 צליל: פועל' : '🔇 צליל: כבוי'; }, 'dark')),
     h('div', { class: 't-credit' }, `בהשראת "שבע ערי הזהב" (דן בונטן, 1984) · שיא אישי: ${G.best}`));
   document.body.append(t);
@@ -98,6 +107,7 @@ function showHow(back) {
     h('p', null, '🛖 ', h('b', null, 'כפרים: '), 'כל כפר שונה. ', h('b', null, 'בגרסה השלווה אין תקיפה'), ' — מושון נותן מתנות, משוחח, סוחר ועוזר לנזקקים. בגרסת השוד אפשר גם לשדוד כפרים: מקבלים זהב ומזון מהר, אבל מאבדים כבוד, יוצרים שבטים עוינים ומארבי נקמה, והמועצה מרימה גבה. ככל שהאמון גדל, הכפר מגלה היכן שוכנת עיר, נותן מזון ועוזר לך. שבטים עוינים אפשר להרגיע בסבלנות ובמתנה.'),
     h('p', null, '🍞 ', h('b', null, 'משאבים: '), 'כל איש צוות אוכל מדי יום. מזון נגמר — אנשים עוזבים. חזור לנמל כדי להצטייד שוב (רווח כשהספינה קרובה לנמל).'),
     h('p', null, '🏙️ ', h('b', null, 'שבע ערים, שבע בחינות: '), 'זיכרון פנסים · חידות · מבוך · גשר · מאזניים · כוכבים · ובעיר השביעית — בחינה של כבוד. את העיר השביעית אפשר לפתוח רק עם שש אבנים.'),
+    h('p', null, '🎒 ', h('b', null, 'מהמשחק המקורי: '), 'כל שבט אוהב מתנה אחרת — נסה וגלה (הכפר ירמוז). ', h('b', null, 'R'), ' לרכוב על סוס (סוס לכל אחד: מהר וחוסך מזון) · ', h('b', null, 'T'), ' לשאול מדריך מקומי מה קרוב · מכרות זהב נמצאים ליד הרים: קח זהב או השאר אנשים וקצת מזון לכרות · אתרי קבורה קדושים — כדאי להתרחק · סערות ושוניות פוגעות בספינה (תיקון בנמל) · שומרים את המשחק מתפריט Esc.'),
     h('p', null, '🎖️ ', h('b', null, 'כבוד: '), 'נדיבות, עזרה והגינות מעלות את הכבוד שלך ואת הדירוג הסופי.'),
     h('div', { class: 'row' }, btn('הבנתי', () => { closeModal(); back(); })));
   showPanel(p);
@@ -141,18 +151,20 @@ function endCinematic() { if (G.state !== 'cine') return; G.state = 'port'; $('#
 
 /* ===== port ===== */
 function openPort(first) {
-  G.modal = true; $('#hud').classList.toggle('hidden', first); const cart = first ? { men: 5, food: 100, gifts: 6, meds: 1 } : { men: 0, food: 0, gifts: 0, meds: 0 };
-  const rows = [['men', '🧑‍🤝‍🧑 אנשי צוות', 'מלחים וסייעים (עד 12)', 1, 25], ['food', '🍞 מזון', 'כל איש אוכל חצי יחידה ליום', 10, 3], ['gifts', '🎁 מתנות', 'כלי עבודה, בדים, חרוזים וכלי נגינה', 1, 6], ['meds', '🧪 תרופות', 'לעזרה לחולים ולצוות', 1, 12]];
+  G.modal = true; $('#hud').classList.toggle('hidden', first);
+  if (!first) { if (G.guides > 0) { log('המדריכים המקומיים נפרדים ממך בנמל — כך נהוג.', ''); G.guides = 0; } G.ride = false; G.hull = 100; }
+  const cart = first ? { men: 5, food: 100, tools: 2, seeds: 2, cloth: 1, music: 1, meds: 1, horses: 0 } : { men: 0, food: 0, tools: 0, seeds: 0, cloth: 0, music: 0, meds: 0, horses: 0 };
+  const rows = [['men', '🧑‍🤝‍🧑 אנשי צוות', 'מלחים ומגלים (עד 12)', 1, 25], ['food', '🍞 מזון', 'כל איש אוכל חצי יחידה ליום', 10, 3], ...KINDS.map(([k, ic, n]) => [k, `${ic} ${n}`, 'מתנה לשבטים — לכל שבט טעם משלו', 1, 6]), ['meds', '🧪 תרופות', 'לעזרה לחולים ולצוות', 1, 12], ['horses', '🐎 סוסים', 'סוס לכל אחד = רכיבה מהירה וחסכונית (מקש R)', 1, 15]];
   const totalEl = h('div', { class: 'budget' }), ok = btn(first ? '⛵ הפלג!' : '✔ אשר והמשך', apply); const qEls = {};
-  const cost = () => cart.men * PRICE.men + Math.ceil(cart.food / 10) * 3 + cart.gifts * PRICE.gifts + cart.meds * PRICE.meds;
+  const cost = () => cart.men * 25 + Math.ceil(cart.food / 10) * 3 + (cart.tools + cart.seeds + cart.cloth + cart.music) * 6 + cart.meds * 12 + cart.horses * 15;
   function upd() { const c = cost(); rows.forEach(([k]) => qEls[k].textContent = cart[k]); totalEl.textContent = `🪙 עלות: ${c} · יישאר: ${Math.floor(G.gold) - c}`; ok.disabled = c > G.gold || (first && cart.men < 1) || G.men + cart.men > 12; }
   const grid = h('div', { class: 'shop' }, rows.map(([k, name, sub, st, pr]) => { qEls[k] = h('b'); return [h('div', { class: 'it' }, name, h('small', null, `${sub} · ${k === 'food' ? '10 יחידות' : 'יחידה'} = ${pr} זהב`)),
     h('div', { class: 'qty' }, h('button', { onclick: () => { cart[k] = Math.max(0, cart[k] - st); Snd.sfx('click'); upd(); } }, '−'), qEls[k], h('button', { onclick: () => { cart[k] += st; Snd.sfx('click'); upd(); } }, '+'))]; }));
-  function apply() { G.gold -= cost(); G.men += cart.men; G.food += cart.food; G.gifts += cart.gifts; G.meds += cart.meds; Snd.sfx('coin'); closeModal();
+  function apply() { G.gold -= cost(); G.men += cart.men; G.food += cart.food; KINDS.forEach(([k]) => G.gk[k] += cart[k]); G.meds += cart.meds; G.horses += cart.horses; G.voyages++; Snd.sfx('coin'); closeModal();
     if (first) { G.state = 'play'; $('#hud').classList.remove('hidden'); if (matchMedia('(pointer:coarse)').matches || innerWidth < 900) $('#touch').classList.remove('hidden'); updateHUD(); wipe();
       log(`מושון מפליג עם ${G.men} אנשי צוות. הים פתוח!`, 'gold'); log('הפלג מזרחה עם החצים אל היבשת. רווח — לרדת לחוף.', ''); }
-    else { log('הספינה מוכנה. רוח טובה!', 'good'); G.state = 'play'; } }
-  const p = h('div', { class: 'panel paper' }, h('h2', null, first ? '⚓ נמל אור־ים' : '⚓ נמל הבית'), h('p', null, first ? 'המועצה העמידה לרשותך ספינה. הצטייד למסע — ואל תשכח: שבטים נפגשים בידיים פתוחות, לא בחרבות.' : `חזרת לנמל. יש לך ${Math.floor(G.gold)} זהב. הצוות כעת: ${G.men}.`), grid, totalEl, h('div', { class: 'row' }, ok, !first && btn('📜 דווח למועצה', openCouncil, 'alt'), !first && btn('ביטול', () => { closeModal(); G.state = 'play'; }, 'dark')));
+    else { log(`מסע מספר ${G.voyages}. הספינה תוקנה ומוכנה. רוח טובה!`, 'good'); G.state = 'play'; } }
+  const p = h('div', { class: 'panel paper' }, h('h2', null, first ? '⚓ נמל אור־ים' : '⚓ נמל הבית'), h('p', null, first ? 'מנהל הנמל מציג את הציוד. הצטייד למסע — ומזון לפני הכול: בלי אוכל אין משלחת.' : `חזרת לנמל. הספינה תוקנה. יש לך ${Math.floor(G.gold)} זהב והצוות מונה ${G.men}.`), grid, totalEl, h('div', { class: 'row' }, ok, !first && btn('📜 דווח למועצה', openCouncil, 'alt'), !first && btn('ביטול', () => { closeModal(); G.state = 'play'; }, 'dark')));
   showPanel(p); upd();
 }
 
@@ -163,7 +175,7 @@ function openCouncil() {
   const pct = exploredPct(), st = G.world.villages.filter(v => v.station).length, s = score(), r = rankIdx(s); const promoted = r > (G.rankIdx || 0);
   if (promoted) { G.rankIdx = r; G.gold += 40 * r; Snd.sfx('stone'); flash(); }
   showPanel(h('div', { class: 'panel paper' }, h('h2', null, '📜 דיווח למועצת הנמל'), h('p', null, 'זקנת הנמל קוראת את מחברת המפות של מושון ומהנהנת באיטיות.'),
-    h('div', { class: 'end-stats' }, [['מפה שנחקרה', pct + '%'], ['אבני אור', G.stones + ' / 7'], ['בארות ובתי ספר', st], ['כבוד', Math.round(G.honor)], ['ניקוד נוכחי', s]].flatMap(([k, v]) => [h('span', null, k), h('b', null, v)])),
+    h('div', { class: 'end-stats' }, [['מסע מספר', G.voyages], ['מפה שנחקרה', pct + '%'], ['מכרות זהב שהתגלו', Math.round(G.world.mines.filter(m => m.found).length / G.world.mines.length * 100) + '%'], ['אבני אור', G.stones + ' / 7'], ['בארות ובתי ספר', st], ['כבוד', Math.round(G.honor)], ['ניקוד נוכחי', s]].flatMap(([k, v]) => [h('span', null, k), h('b', null, v)])),
     h('div', { class: 'rank' }, RANKS[r][1]), G.raids > 0 ? h('p', { class: 'say' }, 'המועצה מודה על הזהב, אך אומרת בשקט: "פחות דם, מושון. שמות הולכים לפני האדם — וגם אחריו."') : null, promoted ? h('p', { class: 'say' }, `קידום! המועצה מעניקה לך דרגה חדשה ופרס של ${40 * r} זהב.`) : h('p', null, 'עוד קצת מפה, עוד קצת כבוד — והקידום הבא קרוב.'),
     h('div', { class: 'row' }, btn('חזרה לנמל', () => { closeModal(); openPort(false); }))));
 }
@@ -173,7 +185,8 @@ function rankIdx(s) { let r = 0; RANKS.forEach(([m], i) => { if (s >= m) r = i; 
 function advanceDay(d) {
   const o = Math.floor(G.day); G.day += d; const n = Math.floor(G.day);
   for (let k = o; k < n; k++) {
-    const need = (G.men + 1) * .5; G.food -= need;
+    const need = (G.men + 1) * .5 * (G.mode === 'land' && G.ride ? .6 : 1) * (1 - .12 * Math.min(3, G.guides)); G.food -= need;
+    for (const m of G.world.mines) if (m.crew > 0 && m.food > 0 && m.gold > 0) { const g = Math.min(m.gold, m.crew * 2); m.gold -= g; m.stock += g; m.food = Math.max(0, m.food - m.crew * .5); }
     if (G.food < 0) { G.food = 0; if (G.men > 0) { G.men--; log('אין מזון! אחד מאנשי הצוות נאלץ לעזוב…', 'bad'); Snd.sfx('bad'); } else return endGame(false, 'הרעב ניצח את המסע. מושון חוזר לנמל, מותש אך חי, ונשבע לצאת שוב.'); }
     else if (G.food < need * 5 && k % 2 === 0) log('⚠️ המזון אוזל — חפש כפר ידידותי או חזור לנמל.', 'bad');
   }
@@ -184,20 +197,25 @@ function advanceDay(d) {
 function tryMove(dx, dy) {
   const nx = G.pos.x + dx, ny = G.pos.y + dy, t = tileAt(nx, ny); if (t === 255) return;
   if (G.mode === 'sea') { if (!isWater(t)) return; G.moveDur = G.storm > 0 ? .3 : .2; G.shipDir = dx !== 0 ? Math.sign(dx) : G.shipDir; }
-  else { if (!isWalk(t) || occupied(nx, ny)) return; G.moveDur = .13 * Math.max(1, COST[t]); G.facing = dx !== 0 ? Math.sign(dx) : G.facing; }
-  G.prev = { x: G.pos.x, y: G.pos.y }; G.from = { x: G.pos.x, y: G.pos.y }; G.pos = { x: nx, y: ny }; G.moveT = 0; G.moving = true; G.stepCost = G.mode === 'sea' ? .2 : .1 * Math.max(1, COST[t]);
+  else { if (!isWalk(t) || occupied(nx, ny)) return; G.moveDur = .13 * Math.max(1, COST[t]) * (G.ride ? .65 : 1); G.facing = dx !== 0 ? Math.sign(dx) : G.facing; }
+  G.prev = { x: G.pos.x, y: G.pos.y }; G.from = { x: G.pos.x, y: G.pos.y }; G.pos = { x: nx, y: ny }; G.moveT = 0; G.moving = true; G.stepCost = G.mode === 'sea' ? .2 : .1 * Math.max(1, COST[t]) * (G.ride ? .8 : 1);
   if (G.mode === 'sea') G.ship = { x: nx, y: ny };
+  if (G.mode === 'sea' && t === T_SHAL && G.world.adj[ny * WW + nx] && Math.random() < .1) hullHit(2, '🪸 שונית! הקרקעית מגרדת את דופן הספינה.');
+}
+function hullHit(n, msg) {
+  G.hull = Math.max(0, G.hull - n); log(`${msg} (שלמות הספינה ${G.hull}%)`, 'bad'); Snd.sfx('bad'); Render.shake(.5); updateHUD();
+  if (G.hull <= 0) endGame(false, 'הספינה נשברה וטבעה, ואיתה כל מה שהיה עליה. מושון ניצל בנס לחוף ומספר את הסיפור לדורות.');
 }
 function afterStep() {
-  G.steps++; G.vis = (G.mode === 'sea' ? 6 : 5) - (G.storm > 0 ? 2 : 0); reveal(G.pos.x, G.pos.y, G.vis); advanceDay(G.stepCost); if (G.ended) return;
+  G.steps++; G.vis = (G.mode === 'sea' ? 6 : 5) - (G.storm > 0 ? 2 : 0) + (G.men >= 8 ? 1 : 0) + (G.men >= 14 ? 1 : 0); reveal(G.pos.x, G.pos.y, G.vis); advanceDay(G.stepCost); if (G.ended) return;
   if (G.mode === 'sea') seaTick(); else landTick();
   updateHUD(); updateCtx();
 }
 function seaTick() {
-  if (G.storm > 0) { G.storm--; if (G.steps % 5 === 0) { G.food = Math.max(0, G.food - 2); } if (Math.random() < .08) { Render.lightning(); Snd.sfx('thunder'); Render.shake(.6); }
+  if (G.storm > 0) { G.storm--; if (Math.random() < .07) hullHit(rint(2, 5), '⛈️ גל ענק פוגע בספינה!'); if (G.steps % 5 === 0) { G.food = Math.max(0, G.food - 2); } if (Math.random() < .08) { Render.lightning(); Snd.sfx('thunder'); Render.shake(.6); }
     if (Math.random() < .25) { const d = pick([[1, 0], [-1, 0], [0, 1], [0, -1]]); const nx = G.pos.x + d[0], ny = G.pos.y + d[1]; if (isWater(tileAt(nx, ny)) && nx > 0) { G.pos = { x: nx, y: ny }; G.ship = { x: nx, y: ny }; G.actor.x = nx; G.actor.y = ny; } }
     if (G.storm === 0) { log('הסערה שככה. השמיים מתבהרים.', 'good'); Snd.mood('sea'); } }
-  else if (G.steps > 12 && Math.random() < .012 && G.pos.x > 8) { G.storm = 16 + rint(0, 8); log('⛈️ סערה! החזק את ההגה — הגלים מטלטלים את הספינה.', 'bad'); Render.lightning(); Snd.sfx('thunder'); Snd.mood('danger'); Render.shake(.8); }
+  else if (G.steps > 12 && Math.random() < .012 * (season() === 3 ? 2 : 1) && G.pos.x > 8) { G.storm = 16 + rint(0, 8); log('⛈️ סערה! החזק את ההגה — הגלים מטלטלים את הספינה.', 'bad'); Render.lightning(); Snd.sfx('thunder'); Snd.mood('danger'); Render.shake(.8); }
   else if (Math.random() < .004) { log(pick(['דולפינים מלווים את הספינה — סימן טוב.', 'שחפים מעל הראש: היבשה קרובה.', 'מושון מצייר בקו נקי את קו החוף במחברת המפות.', 'הצוות שר שיר ישן על רוח מזרחית.']), ''); }
   if (G.pos.x <= 1 && G.pos.y !== undefined) { /* edge of the western sea */ }
 }
@@ -205,8 +223,10 @@ function landTick() {
   const w = G.world, p = G.pos, cheb = (a) => Math.max(Math.abs(a.x - p.x), Math.abs(a.y - p.y));
   const c = w.cities.find(c => cheb(c) <= 1 && !c.done && !c.prompted); if (c) { c.prompted = true; enterCity(c); return; }
   const v = w.villages.find(v => cheb(v) <= 1 && !v.met); if (v) { v.met = true; G.visited++; openVillage(v, true); return; }
+  const mine = w.mines.find(m => m.x === p.x && m.y === p.y); if (mine) { openMine(mine); return; }
+  if (tileAt(p.x, p.y) === T_DESERT && Math.random() < .03) { const f = rint(10, 20); G.food += f; log(`🦬 עדר ביזונים במדבר! ${f} מזון חינם.`, 'good'); }
   if (G.raids > 0 && G.steps % 4 === 0 && Math.random() < Math.min(.08, .02 * G.raids)) { G.modal = true; eventPanel('🏹 מארב נקמה', 'לוחמים משבטים שנפגעו מארבים לך בין העצים — לא רחוק מהמקום ששדדת.', [['להילחם ולסגת', () => { const dead = G.men > 2 && Math.random() < .5 ? 1 : 0; G.men -= dead; G.food = Math.max(0, G.food - 8); log(dead ? 'המארב נדחה, אך אחד מאנשיך נפל.' : 'המארב נדחה במחיר מזון.', 'bad'); }, 'red'], ['לשלם כופר (20 זהב)', () => { if (G.gold >= 20) { G.gold -= 20; Snd.sfx('coin'); } else { G.food = Math.max(0, G.food - 10); log('אין זהב — הם לוקחים מזון.', 'bad'); } }]]); return; }
-  if (G.steps % 3 === 0 && Math.random() < .05 && !w.villages.some(v => cheb(v) <= 3)) landEvent();
+  if (G.steps % 3 === 0 && Math.random() < .05 && !w.villages.some(v => cheb(v) <= 3)) { if (Math.random() < .12) burial(); else landEvent(); }
 }
 
 /* ===== interaction ===== */
@@ -215,7 +235,7 @@ function interact() {
   if (G.mode === 'land') {
     const c = w.cities.find(c => cheb(c) <= 1); if (c) return enterCity(c);
     const v = w.villages.find(v => cheb(v) <= 1); if (v) { if (!v.met) { v.met = true; G.visited++; } return openVillage(v, false); }
-    if (cheb(G.ship) <= 1) { G.mode = 'sea'; G.pos = { x: G.ship.x, y: G.ship.y }; G.actor.x = G.ship.x; G.actor.y = G.ship.y; G.vis = 6; reveal(G.pos.x, G.pos.y, 6); Snd.mood(G.storm > 0 ? 'danger' : 'sea'); Snd.sfx('splash'); wipe(); log('מושון עולה לספינה. מפרשים למעלה!', ''); updateCtx(); }
+    if (cheb(G.ship) <= 1) { G.ride = false; G.mode = 'sea'; G.pos = { x: G.ship.x, y: G.ship.y }; G.actor.x = G.ship.x; G.actor.y = G.ship.y; G.vis = 6; reveal(G.pos.x, G.pos.y, 6); Snd.mood(G.storm > 0 ? 'danger' : 'sea'); Snd.sfx('splash'); wipe(); log('מושון עולה לספינה. מפרשים למעלה!', ''); updateCtx(); }
   } else {
     if (cheb(w.home) <= 4) { G.state = 'port'; return openPort(false); }
     const l = landNeighbor(); if (l) { G.mode = 'land'; G.pos = l; G.prev = { x: l.x, y: l.y }; G.actor.x = l.x; G.actor.y = l.y; G.vis = 5; reveal(l.x, l.y, 5); Snd.mood('land'); Snd.sfx('splash'); log('מושון יורד לחוף. כאן מתחיל הגילוי!', 'gold'); updateCtx(); }
@@ -239,8 +259,22 @@ function openVillage(v, first, preSay) {
     if (v.trust >= 5 && !v.rewarded) { v.rewarded = true; const gold = Math.random() < .5; if (gold) { G.gold += 30; say += ' לאות תודה הם מעניקים לך 30 זהב.'; } else { G.food += 25; say += ' לאות תודה הם ממלאים את המחסן ב־25 מזון.'; } Snd.sfx('coin'); }
   }
   function act(fn) { return () => { fn(); updateHUD(); render(); }; }
-  const doGift = () => { if (G.gifts <= 0) { say = 'אין לך מתנות. אולי תחזור מהנמל?'; return; } G.gifts--; v.gifts++; v.trust += v.trust < 0 ? 3 : 2; addHonor(1); Snd.sfx('gift'); Render.burst(G.pos.x + .5, G.pos.y + .5, '#ffd36a', 30, 3, 3, 1.2);
-    say = v.trust < 0 ? 'חניתות יורדות לאט. הם מביטים במתנה, ואז בך.' : pick(['הם מקבלים את המתנה בחיוך. "אנחנו נזכור אותך."', 'ילדים מתקבצים סביב המתנה בצהלה.', 'זקן הכפר מהנהן: "אדם שנותן — אדם שנשאר."']); rewardCheck(); if (v.trust >= 3 && !v.hinted) say += ' ' + revealHint(v); };
+  const doGift = () => { if (G.gifts <= 0) { say = 'אין לך מתנות. אולי תחזור מהנמל?'; return; } mode = 'gift'; say = 'מה להניח לפני ראש הכפר? כל שבט אוהב משהו אחר.'; };
+  const giveKind = ki => () => {
+    const key = KINDS[ki][0]; if (G.gk[key] <= 0) { say = 'אין לך מזה.'; return; } G.gk[key]--; v.gifts++; mode = 'main';
+    const liked = ki === v.likes, hated = ki === (v.likes + 2) % 4; v.trust += liked ? (v.trust < 0 ? 4 : 3) : hated ? 0 : (v.trust < 0 ? 3 : 2); addHonor(1); Snd.sfx(liked ? 'stone' : 'gift'); Render.burst(G.pos.x + .5, G.pos.y + .5, liked ? '#9be36a' : '#ffd36a', 30, 3, 3, 1.2);
+    say = liked ? 'זה בדיוק מה שרצו! כל הכפר מתכנס סביב המתנה בצהלה.' : hated ? 'הם מביטים במתנה בשתיקה ומניחים אותה בצד — זה לא לטעמם.' : v.trust < 0 ? 'חניתות יורדות לאט. הם מביטים במתנה, ואז בך.' : pick(['הם מקבלים את המתנה בחיוך. "אנחנו נזכור אותך."', 'ילדים מתקבצים סביב המתנה בצהלה.', 'זקן הכפר מהנהן: "אדם שנותן — אדם שנשאר."']);
+    if (!liked && v.gifts >= 2) say += ` נראה שהם מתעניינים במיוחד ב${KINDS[v.likes][2]}.`; rewardCheck(); if (v.trust >= 3 && !v.hinted) say += ' ' + revealHint(v);
+  };
+  const doBeg = () => { if (G.day - (v.begDay ?? -99) < 5) { say = 'ביקשת רק לאחרונה. אין להתעלל באירוח.'; return; } v.begDay = G.day; advanceDay(.1);
+    if (Math.random() < .35 + G.honor / 300) { const f = rint(8, 16); G.food += f; say = `הם מרחמים על המטייל המותש ומגישים ${f} מזון.`; Snd.sfx('good'); } else { say = 'הם מביטים בך ושותקים. לא הפעם.'; Snd.sfx('bad'); } };
+  const doAmaze = () => { if (G.day - (v.amazeDay ?? -99) < 3) { say = 'כבר הראית להם את התעלולים. צריך משהו חדש…'; return; } v.amazeDay = G.day; advanceDay(.2); const hostile = v.trust < 0;
+    if (Math.random() < (hostile ? .5 : .6)) { v.trust += hostile ? 2 : 1; say = pick(['מושון מחזיק זכוכית מגדלת מול השמש ומצית עלה יבש. כולם נסוגים צעד, ואז מוחאים כפיים.', 'המצפן מסתובב בכף ידו ותמיד מצביע לאותו כיוון. הילדים מסתכלים בעיניים פעורות.']); Snd.sfx('good'); Render.burst(G.pos.x + .5, G.pos.y + .5, '#fff', 30, 3, 3, 1.2); }
+    else { if (hostile) { v.trust -= 1; say = 'הם לא התרשמו — ואף נעלבו מההצגה.'; } else say = 'הם מביטים באדישות ופונים לעניינם.'; Snd.sfx('bad'); } };
+  const doThreaten = () => { advanceDay(.2); addHonor(-4, 'איום על ראש כפר'); const r = Math.random();
+    if (r < .4) { const g = rint(15, 40); G.gold += g; G.food += 8; v.trust = Math.min(v.trust, -1); say = `הם נכנעים ומשלמים ${g} זהב ו־8 מזון, אך שנאה בעיניהם.`; Snd.sfx('coin'); }
+    else if (r < .7) { v.trust -= 3; say = 'ראש הכפר מאיים בחזרה! האווירה מתלהטת.'; Snd.sfx('bad'); } else { Snd.sfx('bad'); retreat('ראש הכפר מגרש אתכם בכעס.'); } };
+  const doGuide = () => { if (G.gold < 10) { say = 'שכר מדריך: 10 זהב.'; return; } G.gold -= 10; G.guides++; addHonor(1); Snd.sfx('good'); say = 'צעיר מהכפר מצטרף כמדריך. הוא מכיר כל שביל, ידע לאתר מזון — ויכול להזהיר מפני מקומות קדושים. (מקש T)'; };
   function retreat(msg) {
     const lose = Math.random() < .3 && G.men > 1; if (lose) { G.men--; log('חנית פוצעת אחד מאנשיך. הוא נאלץ לעזוב את המסע.', 'bad'); } else { G.food = Math.max(0, G.food - 6); log('הם גורשים אתכם וחלק מהמזון הולך לאיבוד.', 'bad'); }
     G.pos = { x: G.prev.x, y: G.prev.y }; G.actor.x = G.pos.x; G.actor.y = G.pos.y; leave(msg);
@@ -276,16 +310,22 @@ function openVillage(v, first, preSay) {
     body.append(h('h2', null, v.name), h('div', null, h('span', { class: 'tag' }, `${cu.icon} ${cu.name}`), h('span', { class: 'tag', style: `color:${col}` }, `יחס: ${lbl}`), v.need && !v.needDone ? h('span', { class: 'tag' }, v.need === 'food' ? '🍞 רעבים' : '🤒 חולים') : null),
       h('div', { class: 'meter' }, h('i', { style: `width:${clamp((v.trust + 3) / 10, .03, 1) * 100}%` })), h('p', { class: 'say' }, say));
     const row = h('div', { class: 'row' });
-    if (mode === 'main') {
+    if (mode === 'gift') {
+      KINDS.forEach(([k, ic, n], ki) => row.append(btn(`${ic} ${n} (${G.gk[k]})`, act(giveKind(ki)), G.gk[k] ? '' : 'dark')));
+      row.append(btn('⬅ חזרה', () => { mode = 'main'; render(); }, 'dark'));
+    } else if (mode === 'main') {
       if (v.plundered) { say = 'הכפר שדוד ומרוסק. אין מי שידבר איתך כאן.'; row.append(btn('🚶 להמשיך בדרך', () => leave(), 'dark')); body.append(row); return; }
       row.append(btn(`🎁 מתנה (${G.gifts})`, act(doGift)), btn('💬 לשוחח', act(doTalk), 'alt'));
-      if (G.raid) row.append(btn('⚔️ לשדוד את הכפר', act(doRaid), 'red'));
+      if (v.trust >= 0) row.append(btn('🙏 לבקש עזרה', act(doBeg), 'alt'));
+      row.append(btn('🔭 להדהים בכלי המדע', act(doAmaze), 'alt'));
+      if (G.raid) row.append(btn('⚠️ לאיים על ראש הכפר', act(doThreaten), 'red'), btn('⚔️ לשדוד את הכפר', act(doRaid), 'red'));
       if (v.trust >= 4 && !v.station) row.append(btn('🏗️ באר ובית ספר (25 זהב)', act(doStation)));
       if (v.station) row.append(btn('🛌 מקלט: ארוחה ומנוחה', act(doRest), 'alt'));
       if (v.trust >= 1) row.append(btn('🤝 סחר', () => { mode = 'trade'; render(); }, 'alt'));
       if (v.need && !v.needDone && v.trust >= 0) row.append(btn(v.need === 'food' ? '❤️ לעזור (15 מזון)' : '❤️ לעזור (תרופה)', act(doHelp)));
       row.append(btn('🚶 להמשיך בדרך', () => leave(), 'dark'));
     } else {
+      if (v.trust >= 3 && G.guides < 3) row.append(btn('🧭 לשכור מדריך (10 זהב)', act(doGuide)));
       row.append(btn('🍞 12 מזון ← 6 זהב', act(trade('food'))), btn('🧪 תרופה ← 10 זהב', act(trade('meds'))), btn('🪙 10 מזון → 4 זהב', act(trade('sell')), 'alt'), btn('⬅ חזרה', () => { mode = 'main'; render(); }, 'dark'));
     }
     body.append(row);
@@ -326,6 +366,68 @@ function landEvent() {
     ['להתגונן', () => { if (G.men >= 2 && Math.random() < .4 + G.men * .06) { G.gold += 20; log('הצוות מגן על המחנה והשודדים נסוגים. מצאתם 20 זהב.', 'good'); if (Math.random() < .3) { G.men--; log('אחד מהצוות נפצע ונאלץ לעזוב.', 'bad'); } } else { G.food = Math.max(0, G.food - 12); G.gold = Math.max(0, G.gold - 10); log('ההתגוננות נכשלה. איבדתם מזון וזהב.', 'bad'); Snd.sfx('bad'); } }, 'red']]); }
 }
 
+
+/* ===== mines, burial grounds, guide, ride ===== */
+function openMine(m) {
+  G.modal = true;
+  if (!m.found) { m.found = true; const s0 = Math.min(m.gold, 40); m.gold -= s0; m.stock += s0; Render.dirtyMini(); toast('⛏️ גילית מכרה זהב!', true); Snd.sfx('horn'); }
+  const body = h('div'); const draw = () => {
+    body.innerHTML = '';
+    body.append(h('p', null, `בין הסלעים נוצצים גושי זהב. זהב מוכן לאיסוף: ${m.stock}. ${m.gold > 0 ? 'נראה שיש עוד בעומק האדמה.' : 'המכרה כמעט מדולדל.'}`));
+    if (m.crew) body.append(h('p', { class: 'say' }, `במכרה עובדים ${m.crew} אנשים. מזון שנשאר להם: ${Math.floor(m.food)}.`));
+    const row = h('div', { class: 'row' });
+    if (m.stock > 0) row.append(btn(`🪙 קח ${m.stock} זהב`, () => { G.gold += m.stock; m.stock = 0; Snd.sfx('coin'); updateHUD(); draw(); }));
+    if (m.gold > 0 && G.men >= 3 && G.food >= 20) row.append(btn('⛏️ השאר 2 אנשים + 20 מזון לכרות', () => { m.crew += 2; G.men -= 2; G.food -= 20; m.food += 20; Snd.sfx('good'); updateHUD(); draw(); }, 'alt'));
+    if (m.crew > 0 && G.food >= 15) row.append(btn('🍞 הוסף 15 מזון לכורים', () => { G.food -= 15; m.food += 15; Snd.sfx('good'); updateHUD(); draw(); }, 'alt'));
+    if (m.crew > 0) row.append(btn('🧑‍🤝‍🧑 החזר את הכורים לצוות', () => { G.men += m.crew; m.crew = 0; Snd.sfx('good'); updateHUD(); draw(); }, 'alt'));
+    row.append(btn('להמשיך', closeModal, 'dark')); body.append(row);
+  };
+  draw(); showPanel(h('div', { class: 'panel paper' }, h('h2', null, '⛏️ מכרה זהב'), body));
+}
+function burial() {
+  const opts = [['להתרחק בכבוד', () => addHonor(3, 'כיבדת אתר קדוש'), 'dark']];
+  if (G.raid) opts.unshift(['לחפור ולקחת תכשיטים (+80 זהב)', () => { G.gold += 80; addHonor(-10, 'חילול אתר קדוש'); G.raids++; for (const o of G.world.villages) if (Math.hypot(o.x - G.pos.x, o.y - G.pos.y) < 14) o.trust = Math.min(o.trust, -3); log('כל הכפרים בסביבה זועמים עליך.', 'bad'); Snd.sfx('coin'); }, 'red']);
+  eventPanel('🪦 אתר קבורה קדוש', 'בין העצים נגלה תל אבנים עתיק. מקומיים היו אומרים לך: "זו אדמה קדושה — אל תיגע".', opts);
+}
+function guideTalk() {
+  if (G.state !== 'play' || G.modal || G.mode !== 'land') return;
+  if (G.guides <= 0) return log('אין לך מדריך מקומי. אפשר לשכור אחד בכפר ידידותי (סחר).', '');
+  const w = G.world, p = G.pos; let best = null;
+  const consider = (o, what) => { const d = Math.hypot(o.x - p.x, o.y - p.y); if (!best || d < best.d) best = { d, what, o }; };
+  w.mines.filter(m => !m.found).forEach(m => consider(m, 'מכרה זהב')); w.villages.filter(v => !v.met).forEach(v => consider(v, 'כפר')); w.cities.filter(c => !c.found).forEach(c => consider(c, 'עיר'));
+  if (!best || best.d > 10) return log('המדריך מביט סביב: "אני לא רואה כלום קרוב."', '');
+  const dx = best.o.x - p.x, dy = best.o.y - p.y, dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'מזרח' : 'מערב') : (dy > 0 ? 'דרום' : 'צפון');
+  log(`המדריך מצביע: ${best.what} ${best.d <= 4 ? 'קרוב מאוד' : 'קרוב'} — לכיוון ${dir}.`, 'gold');
+}
+function toggleRide() {
+  if (G.state !== 'play' || G.modal || G.mode !== 'land') return;
+  if (G.horses < G.men + 1) return log(`צריך סוס לכל אחד: ${G.men + 1} סוסים (יש ${G.horses}).`, 'bad');
+  G.ride = !G.ride; log(G.ride ? '🐎 הצוות רוכב — מהר יותר ואוכל פחות.' : 'הצוות יורד מהסוסים.', G.ride ? 'good' : '');
+}
+
+/* ===== save / load ===== */
+const SAVE_KEY = 'niv7_save';
+function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+function saveGame() {
+  try {
+    const w = G.world, keys = ['day', 'limit', 'gold', 'food', 'meds', 'honor', 'words', 'stones', 'stoneOn', 'rankIdx', 'raids', 'mode', 'pos', 'prev', 'ship', 'facing', 'shipDir', 'storm', 'steps', 'helped', 'hull', 'horses', 'ride', 'guides', 'voyages', 'visited', 'gk'];
+    const d = { diff: G.diff, mapMode: G.mapMode, raid: G.raid, seed: w.seed, seen: Array.from(G.seen).join(''), s: Object.fromEntries(keys.map(k => [k, G[k]])),
+      vil: w.villages.map(v => ({ trust: v.trust, att: v.att, met: v.met, hinted: v.hinted, needDone: v.needDone, rewarded: v.rewarded, talks: v.talks, gifts: v.gifts, station: v.station, restDay: v.restDay, plundered: v.plundered, begDay: v.begDay, amazeDay: v.amazeDay })),
+      cit: w.cities.map(c => ({ found: c.found, done: c.done, prompted: c.prompted })), min: w.mines.map(m => ({ found: m.found, gold: m.gold, crew: m.crew, food: m.food, stock: m.stock })) };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d)); log('💾 המשחק נשמר.', 'good'); return true;
+  } catch (e) { log('לא ניתן לשמור (האחסון בדפדפן חסום).', 'bad'); return false; }
+}
+function loadGame() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SAVE_KEY)); G.diff = d.diff; G.mapMode = d.mapMode; G.raid = d.raid;
+    const w = genWorld(d.seed, d.diff); w.villages.forEach((v, i) => Object.assign(v, d.vil[i])); w.cities.forEach((c, i) => Object.assign(c, d.cit[i])); w.mines.forEach((m, i) => Object.assign(m, d.min[i]));
+    Object.assign(G, d.s, { world: w, seen: Uint8Array.from(d.seen.split('').map(Number)), actor: { x: d.s.pos.x, y: d.s.pos.y }, from: { x: d.s.pos.x, y: d.s.pos.y }, moving: false, moveT: 0, moveDur: .2, vis: 6, ended: false });
+    hudPrev = {}; Render.cam.x = G.pos.x; Render.cam.y = G.pos.y; Render.dirtyMini(); $('#title')?.remove(); closeModal(); G.state = 'play'; G.keys = {};
+    $('#hud').classList.remove('hidden'); if (matchMedia('(pointer:coarse)').matches || innerWidth < 900) $('#touch').classList.remove('hidden');
+    Snd.init(); Snd.mood(G.mode === 'sea' ? 'sea' : 'land'); updateHUD(); wipe(); log('📂 המשחק נטען. המשך מסע טוב!', 'gold');
+  } catch (e) { console.error(e); log('לא נמצא משחק שמור תקין.', 'bad'); }
+}
+
 /* ===== ending ===== */
 function score() { const v = G.world.villages.filter(v => v.trust >= 3).length; return exploredPct() * 3 + G.world.villages.filter(v => v.station).length * 30 + G.stones * 150 + v * 25 + Math.round(G.honor) * 6 + Math.floor(G.gold / 4) + (G.stones >= 7 ? Math.max(0, Math.floor(G.limit - G.day)) * 3 : 0) + G.helped * 20; }
 function rankOf(s) { let r = RANKS[0][1]; for (const [m, n] of RANKS) if (s >= m) r = n; return r; }
@@ -346,7 +448,7 @@ function endGame(win, reason) {
 function pause() {
   if (G.state !== 'play' || G.modal) return; Snd.sfx('click');
   showPanel(h('div', { class: 'panel' }, h('h2', null, 'תפריט'), h('div', { class: 'row', style: 'flex-direction:column;align-items:center' },
-    btn('▶ להמשיך', closeModal), btn('📜 איך משחקים', () => showHow(pause), 'alt'), btn(Snd.on ? '🔊 כבה צליל' : '🔇 הפעל צליל', e => { Snd.toggle(); closeModal(); pause(); }, 'dark'),
+    btn('▶ להמשיך', closeModal), btn('💾 שמור משחק', () => { saveGame(); }, 'alt'), btn('📜 איך משחקים', () => showHow(pause), 'alt'), btn(Snd.on ? '🔊 כבה צליל' : '🔇 הפעל צליל', e => { Snd.toggle(); closeModal(); pause(); }, 'dark'),
     btn('🏠 ויתור וחזרה לתפריט הראשי', () => { G.ended = true; closeModal(); showTitle(); }, 'red'))));
 }
 
@@ -359,6 +461,8 @@ addEventListener('keydown', e => {
   if (G.state !== 'play') return;
   if (DIRS[k]) { e.preventDefault(); if (!G.modal) G.keys[k] = true; }
   else if (k === ' ' || k === 'Enter' || k === 'e' || k === 'E') { e.preventDefault(); interact(); }
+  else if (e.code === 'KeyR') toggleRide();
+  else if (e.code === 'KeyT') guideTalk();
   else if (k === 'Escape' || k === 'p') { if (!G.modal) pause(); }
   else if (k === 'h' || k === 'H') { if (!G.modal) showHow(closeModal); }
 });
